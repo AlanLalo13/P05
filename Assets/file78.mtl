@@ -1,0 +1,16 @@
+#              CB Model Pro to mtl 
+#
+#
+#              file78
+#
+#
+
+
+newmtl blobMaterialTexture
+Ka 1.0000 1.0000 1.0000
+Kd 1.0000 1.0000 1.0000
+Ks 1.0000 1.0000 1.0000
+illum 2
+Ns 100
+map_Ka file78.bmp
+map_Kd file78.bmp

@@ -1,0 +1,10 @@
+# MTL written from lego.obj
+newmtl lego.mtl
+Kd 0.784314 0.784314 0.784314
+Ns 128
+d 1
+illum 2
+Ka 0 0 0
+Ks 0.06 0.06 0.06
+map_Kd BanditTexture_LowPoly.png
+map_Ks Bandit_LowPoly_Specular_Map.png
