@@ -5,58 +5,75 @@ using Vuforia;
 
 public class Move : MonoBehaviour
 {
-    // El objeto principal que se moverá entre los marcadores
+    // Objeto principal que se moverá entre marcadores
     public GameObject model;
 
-    // El marcador principal donde debe empezar y regresar el objeto al reiniciar
+    // Marcador principal (donde inicia el modelo y al cual regresa tras reiniciar)
     public ObserverBehaviour mainMarker;
 
-    // Lista de marcadores donde se colocarán los prefabs (EXCLUYENDO el marcador principal)
+    // Marcadores secundarios donde se colocarán objetos aleatorios (prefabs)
     public ObserverBehaviour[] ImageTargets;
 
-    // Lista de objetos (prefabs) que se van a instanciar de forma aleatoria
+    // Prefabs que se colocarán de forma aleatoria sobre los marcadores secundarios
     public GameObject[] objectPrefabs;
 
-    // Panel de victoria
+    // Panel que se muestra al ganar
     public GameObject winPanel;
 
-    // Panel de derrota
+    // Panel que se muestra al perder
     public GameObject losePanel;
 
-    // Velocidad de movimiento entre marcadores
+    // Panel de instrucciones que aparece al iniciar la aplicación
+    public GameObject instructionsPanel;
+
+    // Velocidad del movimiento del objeto principal entre marcadores
     public float speed = 1.0f;
 
-    // Controla si el objeto se está moviendo
+    // Bandera que indica si el objeto se está moviendo (evita múltiples movimientos simultáneos)
     private bool isMoving = false;
 
-    // Guarda la posición y rotación original del modelo principal (para reinicio)
+    // Guarda la posición local original del modelo (como hijo del marcador principal)
     private Vector3 modelStartLocalPosition;
+
+    // Guarda la rotación local original del modelo (como hijo del marcador principal)
     private Quaternion modelStartLocalRotation;
 
-    // Relaciona cada marcador con el objeto que se instanció en él
-    private Dictionary<ObserverBehaviour, GameObject> targetToObject = new Dictionary<ObserverBehaviour, GameObject>();
+    // Diccionario que relaciona cada marcador con su objeto instanciado
+    private Dictionary<ObserverBehaviour, GameObject> targetToObject = new();
 
-    // Marcador al que se le asignó el objeto \"sat\" (para detectar derrota)
+    // Referencia al marcador que tiene el objeto "prohibido" (por ejemplo, el enemigo final)
     private ObserverBehaviour satTarget;
 
-    // Marcadores que ya fueron visitados por el objeto principal
-    private HashSet<ObserverBehaviour> visitedTargets = new HashSet<ObserverBehaviour>();
+    // Conjunto que guarda los marcadores que ya han sido visitados por el jugador
+    private HashSet<ObserverBehaviour> visitedTargets = new();
 
     void Start()
     {
-        // Guardar la posición y rotación inicial del modelo como hijo del marcador principal
+        // Guarda la posición y rotación original del modelo como hijo del marcador principal
         modelStartLocalPosition = model.transform.localPosition;
         modelStartLocalRotation = model.transform.localRotation;
 
-        // Ocultar los paneles de victoria o derrota
+        // Oculta los paneles de resultado al comenzar
         if (winPanel != null) winPanel.SetActive(false);
         if (losePanel != null) losePanel.SetActive(false);
 
-        // Asignar aleatoriamente los prefabs a los marcadores (excepto el principal)
+        // Si hay un panel de instrucciones, lo dejamos activo y esperamos a que el jugador lo cierre
+        // El juego no comienza hasta que se presione el botón de iniciar
+    }
+
+    // Este método debe vincularse al botón de "Iniciar" en el panel de instrucciones
+    public void HideInstructions()
+    {
+        if (instructionsPanel != null)
+        {
+            instructionsPanel.SetActive(false);
+        }
+
+        // Una vez ocultadas las instrucciones, se realiza la asignación aleatoria de objetos
         AssignRandomObjectsToTargets();
     }
 
-    // Método que se llama desde los botones de los marcadores para mover el modelo
+    // Método que se ejecuta al presionar el botón de un marcador para moverse a ese marcador
     public void moveToSpecificMarker(int targetIndex)
     {
         if (!isMoving)
@@ -65,15 +82,14 @@ public class Move : MonoBehaviour
         }
     }
 
-    // Corrutina que mueve el modelo al marcador seleccionado
+    // Corrutina que mueve el modelo al marcador indicado por el índice
     private IEnumerator MoveToTarget(int targetIndex)
     {
         isMoving = true;
 
-        // Obtener el marcador destino
         ObserverBehaviour target = ImageTargets[targetIndex];
 
-        // Validar si está siendo detectado por Vuforia
+        // Verifica que el marcador esté siendo rastreado por la cámara
         if (target == null ||
             (target.TargetStatus.Status != Status.TRACKED &&
              target.TargetStatus.Status != Status.EXTENDED_TRACKED))
@@ -83,7 +99,7 @@ public class Move : MonoBehaviour
             yield break;
         }
 
-        // Movimiento interpolado del objeto principal hacia el marcador destino
+        // Movimiento interpolado desde la posición actual hasta el marcador destino
         Vector3 startPosition = model.transform.position;
         Vector3 endPosition = target.transform.position;
         float journey = 0;
@@ -97,31 +113,32 @@ public class Move : MonoBehaviour
 
         isMoving = false;
 
-        // Activar el objeto instanciado en ese marcador (si lo hay)
+        // Activa el objeto que corresponde al marcador (si existe)
         if (targetToObject.ContainsKey(target))
         {
             targetToObject[target].SetActive(true);
         }
 
-        // Marcar el marcador como visitado
+        // Marca el marcador como visitado
         visitedTargets.Add(target);
 
-        // Verificar condición de victoria o derrota si es el SAT
+        // Verifica si el marcador es el "enemigo final"
         if (target == satTarget)
         {
+            // Si ya se visitaron todos los demás marcadores, se gana
             if (visitedTargets.Count == ImageTargets.Length)
             {
-                Debug.Log("GANASTE: visitaste todos los marcadores antes del SAT.");
+                Debug.Log("GANASTE: completaste todos los marcadores antes del destino final.");
                 if (winPanel != null) winPanel.SetActive(true);
             }
             else
             {
-                Debug.Log("PERDISTE: fuiste al SAT antes de visitar los demás.");
+                Debug.Log("PERDISTE: fuiste al destino final demasiado pronto.");
                 if (losePanel != null) losePanel.SetActive(true);
             }
         }
 
-        // Ocultar el botón del marcador actual para evitar que vuelva a usarse
+        // Desactiva el botón de ese marcador para que no pueda volver a usarse
         Transform canvas = target.transform.Find("Canvas");
         if (canvas != null)
         {
@@ -133,30 +150,30 @@ public class Move : MonoBehaviour
         }
     }
 
-    // Método que reinicia todo el juego (modelo, objetos y botones)
+    // Reinicia el juego completamente
     public void RestartGame()
     {
-        // Ocultar paneles de resultado
+        // Oculta los paneles de victoria o derrota
         if (winPanel != null) winPanel.SetActive(false);
         if (losePanel != null) losePanel.SetActive(false);
 
-        // Restaurar el objeto principal al marcador principal
-        model.transform.SetParent(null); // Desvincular temporalmente
-        model.transform.SetParent(mainMarker.transform); // Volver a ser hijo del marcador principal
+        // Recoloca el modelo en el marcador principal, en su posición y rotación original
+        model.transform.SetParent(null);
+        model.transform.SetParent(mainMarker.transform);
         model.transform.localPosition = modelStartLocalPosition;
         model.transform.localRotation = modelStartLocalRotation;
 
-        // Limpiar lista de visitados
+        // Limpia el registro de marcadores visitados
         visitedTargets.Clear();
 
-        // Eliminar objetos instanciados previos
+        // Destruye los objetos instanciados anteriormente
         foreach (var obj in targetToObject.Values)
         {
             Destroy(obj);
         }
         targetToObject.Clear();
 
-        // Reactivar todos los botones de los marcadores
+        // Reactiva los botones en todos los marcadores
         foreach (ObserverBehaviour target in ImageTargets)
         {
             Transform canvas = target.transform.Find("Canvas");
@@ -170,16 +187,16 @@ public class Move : MonoBehaviour
             }
         }
 
-        // Reinstanciar objetos de forma aleatoria
+        // Asigna nuevamente los objetos aleatorios
         AssignRandomObjectsToTargets();
     }
 
-    // Asigna los objetos aleatoriamente a los marcadores (excepto el principal)
+    // Asigna aleatoriamente prefabs a los marcadores secundarios
     public void AssignRandomObjectsToTargets()
     {
-        List<ObserverBehaviour> availableTargets = new List<ObserverBehaviour>();
+        List<ObserverBehaviour> availableTargets = new();
 
-        // Solo agregamos los marcadores que NO son el marcador principal
+        // Se agregan solo los marcadores que no son el marcador principal
         foreach (ObserverBehaviour target in ImageTargets)
         {
             if (target != mainMarker)
@@ -188,28 +205,28 @@ public class Move : MonoBehaviour
             }
         }
 
-        // Mezclar listas
+        // Mezcla aleatoria de marcadores y prefabs
         ShuffleList(availableTargets);
-        List<GameObject> shuffledPrefabs = new List<GameObject>(objectPrefabs);
+        List<GameObject> shuffledPrefabs = new(objectPrefabs);
         ShuffleList(shuffledPrefabs);
 
         int pairCount = Mathf.Min(availableTargets.Count, shuffledPrefabs.Count);
 
         for (int i = 0; i < pairCount; i++)
         {
-            // Instanciar prefab como hijo del marcador
             GameObject instance = Instantiate(shuffledPrefabs[i]);
             ObserverBehaviour target = availableTargets[i];
 
+            // Se asigna como hijo del marcador y se ajusta posición/rotación/escala
             instance.transform.SetParent(target.transform);
-            instance.transform.localPosition = new Vector3(-0.6f, 0f, 0f); // Desplazamiento visual
+            instance.transform.localPosition = new Vector3(-0.6f, 0f, 0f);
             instance.transform.localRotation = Quaternion.identity;
             instance.transform.localScale = Vector3.one;
-            instance.SetActive(false); // Oculto hasta que el jugador llegue
+            instance.SetActive(false); // Solo se muestra si el marcador es visitado
 
             targetToObject[target] = instance;
 
-            // Detectar si es el objeto \"sat\" para registrar su marcador
+            // Se registra cuál marcador contiene el objeto prohibido (por nombre)
             if (shuffledPrefabs[i].name.ToLower().Contains("sat"))
             {
                 satTarget = target;
@@ -217,7 +234,7 @@ public class Move : MonoBehaviour
         }
     }
 
-    // Utilidad para mezclar listas
+    // Mezcla aleatoria de listas genéricas (algoritmo de Fisher-Yates)
     private void ShuffleList<T>(List<T> list)
     {
         for (int i = 0; i < list.Count; i++)
